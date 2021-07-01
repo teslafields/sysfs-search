@@ -24,7 +24,7 @@ use std::io;
 use std::fs::{self};
 use std::path::Path;
 
-struct USBDevs { path: &'static Path, filter: Vec<&'static str> }
+struct USBDevs { path: &'static Path, filter: Vec<&'static str>, rec_limit: u32 }
 
 trait SysfsSearch {
     // Static method signature; `Self` refers to the implementor type.
@@ -35,65 +35,56 @@ trait SysfsSearch {
     }
 }
 
-impl SysfsSearch for USBDevs {
-    // `Self` is the implementor type: `Sheep`.
-    fn new(path: &'static Path, filter: Vec<&'static str>) -> USBDevs {
-        USBDevs { path: path, filter: filter }
+impl USBDevs {
+    fn new(path: &'static Path, filter: Vec<&'static str>, rec_limit: u32) -> USBDevs {
+        USBDevs { path: path, filter: filter, rec_limit: rec_limit }
     }
 
-    fn path(&self) -> &'static Path {
-        self.path
-    }
-
-    fn search(&self) {
-    }
-}
-
-fn visit_dirs<'a>(dir: &Path, filter: &str, limit: u64, result: &'a mut Vec<String>) -> Result<(), io::Error> {
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            let fname = entry.file_name();
-            let name = String::from(fname.to_str().unwrap());
-            if path.is_dir() &&
-                !name.contains("subsystem") &&
-                !name.contains("driver") &&
-                !name.contains("firmware_node") &&
-                !name.contains("port") &&
-                    limit > 0 {
-                visit_dirs(&path.as_path(), &filter, limit-1, result)?;
-            } else if name == String::from(filter) {
-                // println!("{:?}, {:?}", path, path.parent());
-                let str_path = path.into_os_string();
-                result.push(String::from(str_path.to_str().unwrap()));
+    fn visit_dirs(&mut self, dir: &Path, filter: &str, limit: u32, result: &mut Vec<String>) -> Result<(), io::Error> {
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                let fname = entry.file_name();
+                let name = String::from(fname.to_str().unwrap());
+                if path.is_dir() &&
+                        !name.contains("subsystem") &&
+                        !name.contains("driver") &&
+                        !name.contains("firmware_node") &&
+                        !name.contains("port") &&
+                        limit > 0 {
+                    self.visit_dirs(&path.as_path(), filter, limit-1, result)?;
+                } else if name == String::from(filter) {
+                    let str_path = path.into_os_string();
+                    result.push(String::from(str_path.to_str().unwrap()));
+                }
             }
         }
+        Ok(())
     }
-    Ok(())
-}
 
-fn search(dir: &Path, filter: &Vec<&str>) -> Vec<String> {
-    let mut result: Vec<String> = Vec::new();
-    if filter.len() == 0 {
-        return result;
-    }
-    for i in 0..filter.len() {
-        if i == 0 {
-            let _ = visit_dirs(dir, filter[i], 7, &mut result);
-        } else {
-            result.retain(|x| x.contains(filter[i]));
+    fn search(&mut self) -> Vec<String> {
+        let mut result: Vec<String> = Vec::new();
+        if self.filter.len() == 0 {
+            return result;
         }
+        println!("{:?} {:?}", self.path, self.filter);
+        for i in 0..self.filter.len() {
+            if i == 0 {
+                let _ = self.visit_dirs(self.path, self.filter[i], self.rec_limit, &mut result);
+            } else {
+                result.retain(|x| x.contains(self.filter[i]));
+            }
+        }
+        result
     }
-    result
 }
 
 fn main() {
     let path = Path::new("/sys/bus/usb/devices/usb1");
     let filter = vec!["dev", "ttyUSB"];
-    let usbs: USBDevs = USBDevs::new(path, filter);
-    usbs.output();
-    let result = search(usbs.path(), &usbs.filter);
+    let mut usbs: USBDevs = USBDevs::new(path, filter, 7);
+    let result = usbs.search();
     println!("\n--------------------------------------------------\n");
     for item in result {
         println!("{:?}", item);
