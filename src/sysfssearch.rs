@@ -1,15 +1,8 @@
-// trait SysfsSearch {
-//     fn new(path: &'static Path, filter: Vec<&'static str>) -> Self;
-//     fn path(&self) -> &'static Path;
-//     fn search(&self);
-//     fn output(&self) {
-//     }
-// }
-use crate::utils;
 use std::io;
 use std::fs::{self};
 use std::path::Path;
 use std::default::Default;
+use crate::utils;
 
 #[derive(Default)]
 pub struct SysfsSearch<'a> {
@@ -33,7 +26,8 @@ impl SysfsSearch<'_> {
         }
     }
 
-    fn visit_dirs(dir: &Path, filter: &str, limit: u32, result: &mut Vec<String>) -> Result<(), io::Error> {
+    fn visit_dirs(dir: &Path, filter: &str, limit: u32, result: &mut Vec<String>)
+        -> Result<(), io::Error> {
         if dir.is_dir() {
             for entry in fs::read_dir(dir)? {
                 let entry = entry?;
@@ -57,24 +51,6 @@ impl SysfsSearch<'_> {
         Ok(())
     }
 
-    fn get_property(base_str: &str, key: &str) -> Option<String> {
-        let start_idx = base_str.find(key);
-        if start_idx.is_none() {
-            return None;
-        }
-        let start_idx = start_idx.unwrap();
-        let offset: usize = key.len() + start_idx + 1;
-        let end_idx = &base_str[offset..].find('\n');
-        if end_idx.is_none() {
-            return None;
-        }
-        let end_idx = end_idx.unwrap();
-        let value_sliced: &str = &base_str[offset..offset + end_idx];
-        // let value: u32 = u32::from_str_radix(value_sliced, 16).unwrap();
-        println!("str[{}..{}] = {}", offset, offset + end_idx, value_sliced);
-        Some(String::from(value_sliced))
-    }
-
     fn run_udevadm(&self, path_vec: &Vec<String>) -> Vec<utils::CommandResult> {
         let mut stdout_vec = Vec::new();
         for path in path_vec {
@@ -84,9 +60,9 @@ impl SysfsSearch<'_> {
         stdout_vec
     }
 
-    pub fn search(&mut self) -> Option<&Vec<String>> {
+    fn recursive_search(&mut self) {
         let mut path_list: Vec<String> = Vec::new();
-        println!("{:?} {:?}", self.path, self.filter);
+        // println!("{:?} {:?}", self.path, self.filter);
         if self.filter.is_none() {
             path_list.push(String::from(self.path));
         } else {
@@ -99,11 +75,12 @@ impl SysfsSearch<'_> {
                 limit = self.search_limit.unwrap();
             }
             if filter.len() == 0 {
-                return None;
+                return;
             }
             for i in 0..filter.len() {
                 if i == 0 {
-                    let _ = Self::visit_dirs(Path::new(self.path), filter[i], limit, &mut path_list);
+                    let _ = Self::visit_dirs(Path::new(self.path), filter[i],
+                                             limit, &mut path_list);
                 } else {
                     path_list.retain(|x| x.contains(filter[i]));
                 }
@@ -120,10 +97,66 @@ impl SysfsSearch<'_> {
             let out = item.stdout.unwrap();
             self.buffer.push(out);
         }
+        /* 
         for i in 0..self.buffer.len() {
             println!("{}", self.buffer[i]);
         }
-        Some(&self.buffer)
+        */
+    }
+    
+    fn get_single_property(&self, base_str: &str, key: &str) -> Option<String> {
+        let start_idx = base_str.find(key);
+        if start_idx.is_none() {
+            return None;
+        }
+        let start_idx = start_idx.unwrap();
+        let offset: usize = key.len() + start_idx + 1;
+        let end_idx = &base_str[offset..].find('\n');
+        if end_idx.is_none() {
+            return None;
+        }
+        let end_idx = end_idx.unwrap();
+        let value_sliced: &str = &base_str[offset..offset + end_idx];
+        // let value: u32 = u32::from_str_radix(value_sliced, 16).unwrap();
+        // println!("str[{}..{}] = {}", offset, offset + end_idx, value_sliced);
+        Some(String::from(value_sliced))
+    }
+
+    pub fn search(&mut self) -> usize {
+        if self.buffer.len() == 0 {
+            self.recursive_search();
+        }
+        self.buffer.len()
+    }
+
+    pub fn get_property(&self, key: &str, criteria: Option<&Vec<(&str, &str)>>)
+            -> Option<Vec<String>> {
+        if self.buffer.len() == 0 {
+            return None;
+        }
+        let mut property_list = Vec::new();
+        for out_str in self.buffer.iter() {
+            let value = self.get_single_property(out_str, key);
+            if value.is_some() {
+                if criteria.is_some() {
+                    let criteria_list = criteria.as_ref().unwrap();
+                    let mut cond_ok = true;
+                    for cond in criteria_list.iter() {
+                        let cond_val = self.get_single_property(out_str, cond.0);
+                        cond_ok = cond_ok && cond_val == Some(String::from(cond.1));
+                    }
+                    if cond_ok {
+                        property_list.push(value.unwrap());
+                    }
+                } else {
+                    property_list.push(value.unwrap());
+                }
+            }
+        }
+        if property_list.len() == 0 {
+            return None;
+        }
+        Some(property_list)
     }
 }
 

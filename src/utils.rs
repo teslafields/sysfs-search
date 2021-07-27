@@ -8,7 +8,7 @@ pub struct CommandResult {
 }
 
 pub fn execute_command(cmd: &str, args: Option<&[&str]>) -> CommandResult {
-    println!("DEB: {} {:?}", cmd, args);
+    // println!("DEB: {} {:?}", cmd, args);
     let mut command = Command::new(cmd);
     if args.is_some() {
         command.args(args.unwrap());
