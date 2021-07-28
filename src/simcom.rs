@@ -8,6 +8,8 @@ pub struct SimCom<'a> {
 impl SimCom<'_> {
     const SIMCOM_VID: &'static str = "1e0e"; // 7694
     const SIM7600_MID: &'static str = "9001"; // 36865
+    pub const SIM7600: &'static str = "SIM7600";
+
     pub fn new<'a>(
             path: &'a str,
             filter: Option<Vec<&'a str>>,
