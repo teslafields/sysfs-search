@@ -1,8 +1,11 @@
 [package]
 name = "sysfs-search"
 version = "0.1.0"
-authors = ["tessele <tessele@weg.net>"]
 edition = "2018"
+authors = ["Benhur Tessele <tessele@weg.net>"]
+license-file = "LICENSE"
+repository = "https://gitlab.weg.net/edge-devices-connectivity/ed300/sysfs-searcher.git"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

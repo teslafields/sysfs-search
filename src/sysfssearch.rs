@@ -70,7 +70,7 @@ impl SysfsSearch<'_> {
             let filter = filter.unwrap();
             let limit: u32;
             if self.search_limit.is_none() {
-                limit = u32::MAX;
+                limit = std::u32::MAX;
             } else {
                 limit = self.search_limit.unwrap();
             }
